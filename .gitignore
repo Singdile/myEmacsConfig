@@ -1,0 +1,13 @@
+# 插件目录
+elpa/
+
+# 各种运行缓存和日志
+.cache/
+auto-save-list/
+backups/
+projects
+recentf
+lsp-session-v1
+
+# Tree-sitter 编译出来的二进制文件
+tree-sitter/
