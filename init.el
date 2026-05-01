@@ -182,6 +182,10 @@
 (use-package go-ts-mode
   ;; Emacs 29+ 已经把这个模块写进了底层，所以不需要从外部源 ensure 下载
   :ensure nil 
+
+  :init
+  (add-to-list 'major-mode-remap-alist '(go-mode . go-ts-mode)) ;;将使用go-mode地方全部替换为go-ts-mode
+  (add-to-list 'major-mode-remap-alist '(go-mod-mode . go-mod-ts-mode)) ;;同上
   
   ;; 接管扩展名：确保 .go 和 go.mod 走现代引擎
   :mode (("\\.go\\'" . go-ts-mode)
@@ -339,6 +343,37 @@
 
 
 
+
+;; ---------------------------------------------------------
+;; 5 原生项目管理 (Project.el)
+;; ---------------------------------------------------------
+(use-package project
+  ;; Emacs 29 内置，绝对不要加 :ensure t 去外部下载
+  :ensure nil
+  
+  :bind (;; 1. 项目内搜文件 (配合 Vertico/Orderless 体验极佳)
+         ("C-x p f" . project-find-file)
+         
+         ;; 2. 项目内全局搜代码 (无缝调用 Consult 和外部 Ripgrep 工具)
+         ("C-x p s" . consult-ripgrep)
+         
+         ;; 3. 极速切换到其他项目
+         ("C-x p p" . project-switch-project)
+         
+         ;; 4. 项目内执行编译/测试 (比如 go build)
+         ("C-x p c" . project-compile))
+         
+  :config
+  ;; 优化切换项目后的默认行为：
+  ;; 当你按下 C-x p p 选中一个新项目后，默认直接打开那个项目的文件搜索列表，
+  ;; 而不是傻乎乎地打开一个无用的 Dired 目录视图。
+  (setq project-switch-commands
+        '((project-find-file "Find file" f)
+          (consult-ripgrep "Find regexp" s)
+          (project-dired "Dired" d)
+          (magit-project-status "Magit" m))))
+
+
 ;; ---------------------------------------------------------
 ;; Magit: 宇宙最强 Git 交互终端
 ;; ---------------------------------------------------------
@@ -358,3 +393,124 @@
   (setq magit-display-buffer-function 'magit-display-buffer-same-window-except-diff-v1))
 
 
+;; ---------------------------------------------------------
+;; Dired: 原生终极文件管理器
+;; ---------------------------------------------------------
+(use-package dired
+  :ensure nil  ;; 它是 Emacs 内置的，声明不下载
+  :config
+  ;; 1. 解决 Buffer 爆炸：进入新目录时，自动杀掉旧目录的 Buffer (Emacs 28+ 内置)
+  (setq dired-kill-when-opening-new-dired-buffer t)
+
+  ;; 2. 开启 DWIM 智能目标猜测 (分屏操作神器)
+  (setq dired-dwim-target t)
+
+  ;; 3. 注入底层 ls 参数：显示容量单位(h)，显示所有隐藏文件(a)，并且文件夹置顶
+  (setq dired-listing-switches "-lah --group-directories-first")) ; 
+
+
+
+;; ---------------------------------------------------------
+;; 8. 终端模拟器 (纯原生 Vterm 流派)
+;; ---------------------------------------------------------
+(use-package vterm
+  :ensure t
+  ;; 全局快捷键：呼出终端 (绑定在你最顺手的 C-c 前缀下)
+  :bind (("C-c v" . vterm)) 
+  
+  :config
+  ;; 性能与清理机制
+  (setq vterm-max-scrollback 10000)
+  (setq vterm-kill-buffer-on-exit t)
+  
+  ;; 【核心】：按键隔离与穿透白名单;;  通常，vterm里面的指令是完全模拟真实的linux终端，但是为了使用emacs的指令，规定了一些前缀使用emacs的指令
+  ;; 确保以下神圣的前缀键在终端内依然归 Emacs 管，绝不被终端吞噬
+  (setq vterm-keymap-exceptions
+        '("C-c" "C-x" "C-g" "C-h" "M-x" "M-o"))
+        
+  ;; 【原生弹窗管理】：接管底层 display-buffer-alist
+  ;; 告诉 Emacs：只要是名叫 *vterm* 的 Buffer，统统给我按规定在底部弹出，且占据 30% 高度
+  (add-to-list 'display-buffer-alist
+               '("^\\*vterm\\*"
+                 (display-buffer-reuse-window display-buffer-at-bottom)
+                 (reusable-frames . visible)
+                 (window-height . 0.3))))
+
+
+
+
+
+;; ---------------------------------------------------------
+;; 9. 第二大脑：Org-mode 基础底盘
+;; ---------------------------------------------------------
+(use-package org
+  :ensure nil ;; 系统内置，绝不外求
+  :config
+  ;; 指向你的物理知识库核心
+  (setq org-directory "~/org/")
+  
+  ;; 视觉优化：开启原生缩进，隐藏多余的星号，让文章看起来像现代笔记
+  (setq org-startup-indented t)
+  (setq org-hide-leading-starsn t)  
+)
+
+;; ---------------------------------------------------------
+;; 10. 网状知识库：Org-roam 双链引擎
+;; ---------------------------------------------------------
+(use-package org-roam
+  :ensure t
+  :custom
+  ;; 强制解析为绝对路径，防止软链接导致的数据库混乱
+  (org-roam-directory (file-truename "~/org/"))
+  
+  ;; 将极其强大的双向链接指令，绑定在 C-c n 前缀下
+  :bind (("C-c n l" . org-roam-buffer-toggle)  ;; 显示当前笔记的后向链接(Backlinks)窗口
+         ("C-c n f" . org-roam-node-find)      ;; 核心：全局查找或新建一个节点
+         ("C-c n i" . org-roam-node-insert)    ;; 在当前文章中，插入指向其他节点的链接
+         ("C-c n c" . org-roam-capture))       ;; 随时随地闪念记录
+         
+  :config
+  ;; 【引擎点火】：这行代码是 Doom 帮你藏起来的核心。
+  ;; 它会让 Emacs 在后台实时监听 ~/org/ 目录，只要文件一保存，瞬间更新数据库！
+  (org-roam-db-autosync-mode))
+
+
+
+
+;; ---------------------------------------------------------
+;;  Org-mode 视觉大修与表格完美对齐
+;; ---------------------------------------------------------
+
+;; 1. 原生底层美化微调 (无需下载插件)
+(use-package org
+  :ensure nil
+  :config
+  ;; 隐藏加粗(*)、斜体(/)、代码(=)两边的标记符号，让文本清爽干净
+  (setq org-hide-emphasis-markers t)
+  
+  ;; 将 LaTeX 语法直接渲染为特殊符号 (例如输入 \alpha 会直接显示为 α)
+  (setq org-pretty-entities t)
+  
+  ;; 让表格里的英文自动换行，防止某个长网址把表格撑爆
+  (setq org-startup-truncated nil))
+
+;; 2. 标题符号美化引擎 (org-superstar)
+;; 作用：把默认难看的星号 *** 替换成现代化的圆圈、花朵或几何图形
+(use-package org-superstar
+  :ensure t
+  ;; 只要打开 org-mode，就自动激活这个漂亮的渲染引擎
+  :hook (org-mode . org-superstar-mode)
+  :config
+  ;; 自定义 1~8 级标题的符号，你可以随便换成自己喜欢的 Unicode 字符
+  (setq org-superstar-headline-bullets-list '("◉" "○" "✸" "✿" "✤" "✜" "◆" "▶"))
+  ;; 彻底隐藏正文缩进时的那些多余的引导线
+  (setq org-superstar-remove-leading-stars t))
+
+;; 3. 像素级表格对齐神器 (valign)
+;; 作用：彻底解决中英文混排时表格竖线对不齐的千古难题！
+(use-package valign
+  :ensure t
+  :hook (org-mode . valign-mode)
+  :config
+  ;; 开启完美的像素级无缝拼接条，让表格竖线看起来毫无断层
+  (setq valign-fancy-bar t))
