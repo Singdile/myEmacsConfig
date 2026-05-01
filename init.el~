@@ -120,10 +120,6 @@
   ;; --- 4. 快捷键与外部集成 ---
   ;; 将 LSP 的按键菜单注册进 which-key 中
   (add-hook 'lsp-mode-hook 'lsp-enable-which-key-integration)
-
-  ;; 查看接口/结构体实现
-  (define-key lsp-mode-map (kbd "M-g i") 'lsp-find-implementation)
-  
   ;; 绑定 C-h . 在右侧分屏打开详尽的只读文档
   (define-key lsp-mode-map (kbd "C-h .") 'lsp-describe-thing-at-point))
 
@@ -158,53 +154,19 @@
 
 
 
-
-
 ;; ---------------------------------------------------------
-;;  Tree-sitter 视觉解析引擎与自动化大管家
+;; 5. Go 语言开发环境
 ;; ---------------------------------------------------------
-(use-package treesit-auto
-  :ensure t
-  :custom
-  ;; 当遇到没有安装“解析卡带(C源码)”的语言时，自动在底部提示是否下载
-  ;; (如果你嫌烦，可以改成 t，它就会在后台一声不吭地全部自动下载编译)
-  (treesit-auto-install 'prompt)
+(use-package go-mode
+  :mode "\\.go\\'"
+  :hook (go-mode . lsp-deferred)
   :config
-  ;; 核心操作：让大管家修改 Emacs 的全局文件映射表。
-  ;; 以后你打开任何文件，只要有对应的 ts 模式，它就会自动用 ts 模式替换掉老旧的原生模式。
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  ;; 启动大管家
-  (global-treesit-auto-mode))
-
-;; ---------------------------------------------------------
-;; Go 语言开发环境 (完全基于 Tree-sitter 引擎)
-;; ---------------------------------------------------------
-(use-package go-ts-mode
-  ;; Emacs 29+ 已经把这个模块写进了底层，所以不需要从外部源 ensure 下载
-  :ensure nil 
-  
-  ;; 接管扩展名：确保 .go 和 go.mod 走现代引擎
-  :mode (("\\.go\\'" . go-ts-mode)
-         ("/go\\.mod\\'" . go-mod-ts-mode))
-         
-  ;; Hook 联动：只要开启 go-ts-mode，立刻在后台静默唤醒 gopls (LSP)
-  :hook ((go-ts-mode . lsp-deferred)
-         (go-mod-ts-mode . lsp-deferred))
-         
-  :config
-  ;; 缩进规范：Go 官方严格规定的 4 个空格宽度
-  (setq go-ts-mode-indent-offset 4)
-
-  ;; 自动化防御：每次按下 C-x C-s 保存代码时的“强制洁癖”
-  (add-hook 'before-save-hook
+  (setq gofmt-command "goimports")
+  (add-hook 'lsp-mode-hook
             (lambda ()
-              (when (eq major-mode 'go-ts-mode)
-                ;; 1. 强制标准排版 (使用gopls内部的gofmt)
-                (lsp-format-buffer)
-                ;; 2. 自动补充缺失的包，清理没用到的包 (使用gopls内部的goimports)
-                (lsp-organize-imports)))))
-
-
+              (when (derived-mode-p 'go-mode)
+                (add-hook 'before-save-hook #'lsp-format-buffer t t)
+                (add-hook 'before-save-hook #'lsp-organize-imports t t)))))
 
 
 
@@ -276,7 +238,7 @@
 (global-set-key (kbd "C-c r") 'recompile)
 
 ;; ---------------------------------------------------------
-;; 现代 Minibuffer (命令搜索与补全体系)
+;; 现代 Minibuffer (搜索与补全体系)
 ;; ---------------------------------------------------------
 ;; 1. Vertico: 垂直 UI 展示引擎
 ;; 作用：把 M-x 或找文件的单行提示，变成极其优雅的垂直下拉列表
@@ -305,56 +267,3 @@
   :ensure t
   :init
   (marginalia-mode 1))
-
-
-
-;; ---------------------------------------------------------
-;;  Consult: 现代文本搜索与导航终极武器
-;; ---------------------------------------------------------
-(use-package consult
-  ;; 使用 :bind 区域，直接将 Consult 函数绑定到你肌肉记忆中的快捷键上
-  :bind (
-         ;; 1. 缓冲与文件穿梭 (替代原生 C-x b)
-         ("C-x b" . consult-buffer)                ;; 超级缝合怪：当前文件 + 最近打开 + 书签
-         
-         ;; 2. 文件内搜索与导航 (替代原生 C-s)
-         ("C-s" . consult-line)                    ;; 列表式文件内搜索 (带实时预览)
-         ("M-g g" . consult-goto-line)             ;; 实时预览跳行 (替代原生 M-g g)
-         ("M-g o" . consult-imenu)                 ;; 提取当前文件的函数/结构体大纲
-         
-         ;; 3. 全局项目搜索 (调用外部神器)
-         ("M-s r" . consult-ripgrep)               ;; 项目级极速代码搜索
-         
-         ;; 4. 报错排查
-         ("M-g e" . consult-compile-error)         ;; 提取所有编译/检查报错形成列表
-         ))
-
-;; (可选) 配置最近打开的文件列表历史记录，喂给 consult-buffer 使用
-(use-package recentf
-  :ensure nil
-  :init
-  (recentf-mode 1)
-  :config
-  (setq recentf-max-saved-items 100))
-
-
-
-;; ---------------------------------------------------------
-;; Magit: 宇宙最强 Git 交互终端
-;; ---------------------------------------------------------
-(use-package magit
-  :ensure t
-  :bind (;; 大佬们的“肌肉记忆”键位：C-x g (g 代表 git)
-         ("C-x g" . magit-status)
-         ;; 快速查看当前行是谁写的 (Git Blame)
-         ("C-c g b" . magit-blame))
-  
-  :config
-  ;; 性能优化：对于超大型项目，可以关闭不常用的状态检测
-  (setq magit-refresh-status-buffer nil)
-  
-  ;; 视觉优化：在当前窗口直接打开 status，而不是劈开一个奇怪的小窗口
-  ;; 这符合你之前追求的“全屏沉浸式”体验
-  (setq magit-display-buffer-function 'magit-display-buffer-same-window-except-diff-v1))
-
-
