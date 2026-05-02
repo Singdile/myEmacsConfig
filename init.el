@@ -73,6 +73,24 @@
 (require 'use-package)
 (setq use-package-always-ensure t)
 
+
+
+
+;; ---------------------------------------------------------
+;; 环境变量强制同步 (Daemon 模式必须)
+;; ---------------------------------------------------------
+(use-package exec-path-from-shell
+  :ensure t
+  :config
+  ;; 当在 macOS 或 Linux 的 Daemon 模式下时，强制从用户的 Shell 拉取 PATH
+  (when (memq window-system '(mac ns x pgtk))
+    (exec-path-from-shell-initialize)))
+
+
+
+
+
+
 ;; ---------------------------------------------------------
 ;; 4. 代码补全框架 (Auto-completion)
 ;; ---------------------------------------------------------
@@ -252,7 +270,7 @@
 
 
 ;; ---------------------------------------------------------
-;; 外观：字体与主题 (Tsoding 极简流派)
+;; 外观：字体与主题 (极简流派)
 ;; ---------------------------------------------------------
 
 ;;  配置系统级默认字体 (Iosevka)
@@ -261,17 +279,11 @@
 ;; :height 140 代表字号为 14.0 pt (Emacs 中 height 的单位是 1/10 磅)。
 (set-face-attribute 'default nil :font "Iosevka" :height 140)
 
-;;  自动化下载并加载主题 (Gruber Darker)
-(use-package gruber-darker-theme
-  ;; :ensure t 让 use-package 找不到时自动去你的插件源下载
+
+ (use-package doom-themes
   :ensure t
   :config
-  ;; load-theme 函数用于真正应用主题。
-  ;; 结尾的 t 极其重要：它代表 "NO-CONFIRM" (不进行安全确认)。
-  ;; Emacs 认为加载第三方主题有安全风险(因为主题本质也是在执行 Lisp 代码)，
-  ;; 如果不传 t，每次启动 Emacs 它都会在底部弹窗问你“是否信任该主题”。
-  (load-theme 'gruber-darker t))
-
+  (load-theme 'doom-tokyo-night t))
 
 ;; ---------------------------------------------------------
 ;; x编译与调试快捷键 (C-c 前缀流派)
@@ -514,3 +526,37 @@
   :config
   ;; 开启完美的像素级无缝拼接条，让表格竖线看起来毫无断层
   (setq valign-fancy-bar t))
+
+
+
+;; ---------------------------------------------------------
+;;  TRAMP 远程开发底层加速引擎
+;; ---------------------------------------------------------
+(use-package tramp
+  :ensure nil
+  :config
+  ;; 默认强制使用最快最主流的 ssh 协议
+  (setq tramp-default-method "ssh")
+  
+  ;; 【核心性能优化】：禁用远程文件的版本控制轮询检查
+  ;; 防止 Emacs 频繁跨网络询问 "这个文件是被 Git 管理的吗？" 导致卡顿
+  (setq vc-ignore-dir-regexp
+        (format "%s\\|%s" vc-ignore-dir-regexp tramp-file-name-regexp))
+        
+  ;; 关闭 TRAMP 自动将远程临时文件备份到本地的功能，减轻网络 I/O 负担
+  (setq tramp-auto-save-directory temporary-file-directory)
+  
+  ;; 优化大文件传输的数据块大小限制 (2MB)
+  (setq tramp-copy-size-limit (* 2 1024 1024)))
+
+
+
+;; ---------------------------------------------------------
+;; 目录级环境变量自动加载引擎 (direnv 整合)
+;; ---------------------------------------------------------
+(use-package envrc
+  :ensure t
+  :config
+  ;; 全局激活：无论本地还是通过 TRAMP 打开远程文件，
+  ;; 只要目录下有 .envrc 文件，Emacs 就会自动读取并应用其环境！
+  (envrc-global-mode))
